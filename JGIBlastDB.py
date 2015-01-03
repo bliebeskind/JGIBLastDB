@@ -1,4 +1,5 @@
 import csv
+import parsers
 import sqlite3 as sql
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -26,35 +27,14 @@ class JGIBlastDB:
 				SELECT Count() FROM %s''' % table).fetchone()[0]
 			print "\t".join([table,str(num_cols),str(num_rows)])
 	
-		
-	def _jgi_blast_reader(self,csvfile,dialect):
-		count = 0
-		with open(csvfile,'rb') as f:
-			reader = csv.reader(f,dialect)
-			reader.next() # skip header
-			for line in reader:
-				orgString,protID = tuple(line[0].split("|"))
-				newline = [protID,orgString] + [i.strip("%") for i in line[1:]]
-				yield tuple(newline)
-				count +=1
-				if count % 10 == 0:
-					print count
-		print "Read %i blast lines" % count
-					
-	def _jgi_fasta_reader(self,fastaFile):
-		count = 0
-		records = SeqIO.parse(fastaFile,'fasta')
-		for rec in records:
-			orgString,protID = tuple(rec.id.split("|")[1:3])
-			yield (protID,orgString,str(rec.seq))
-			count +=1
-			if count % 10 == 0:
-				print count
-		print "Read %i fasta lines" % count
-
 
 	def load_jgi_csv(self,csv_file,dialect='excel'):
 		'''
+		Load a JGI blast csv file into a SQLite database. Creates a new table
+		called JGIBlast.
+		
+		Columns correspond to the csv except the first csv column, "Hit" 
+		is broken into two columns in the database: "protID" and "orgString".
 		'''
 		try:
 			self.con.execute('''
@@ -84,10 +64,12 @@ class JGIBlastDB:
 			self.con.executemany('''
 				INSERT INTO JGIBlast 
 				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-				''', self._jgi_blast_reader(csv_file,dialect))
+				''', parsers.jgi_csv_reader(csv_file,dialect))
 			
 	def load_jgi_fasta(self,fastaFile):
 		'''
+		Load the corresponding fasta into a table called JGIFasta. Assumption
+		is that fasta file will have proteins.
 		'''
 		try:
 			self.con.execute('''
@@ -102,4 +84,23 @@ class JGIBlastDB:
 		with self.con:
 			self.con.executemany('''
 			INSERT INTO JGIFasta VALUES (?,?,?)
-			''', self._jgi_fasta_reader(fastaFile))
+			''', parsers.jgi_fasta_reader(fastaFile))
+			
+	def load_reciprocal_blast(self,blastfile):
+		'''
+		'''
+		try:
+			self.con.execute('''
+				CREATE TABLE
+				rBlast
+				(protID TEXT PRIMARY KEY,
+				orgString TEXT,
+				hit TEXT,
+				evalue REAL,
+				FOREIGN KEY(protID) REFERENCES JGIBlast(protID))''')
+		except sql.Error as e:
+			return e
+		with self.con:
+			self.con.executemany('''
+				INSERT INTO rBlast VALUES (?,?,?,?)
+				''', parsers.blast_hit_gen(blastfile))
