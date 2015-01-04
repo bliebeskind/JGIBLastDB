@@ -27,6 +27,7 @@ class JGIBlastDB:
 				SELECT Count() FROM %s''' % table).fetchone()[0]
 			print "\t".join([table,str(num_cols),str(num_rows)])
 	
+	## Loading Functions
 
 	def load_jgi_csv(self,csv_file,dialect='excel'):
 		'''
@@ -122,3 +123,37 @@ class JGIBlastDB:
 			self.con.executemany('''
 				INSERT INTO rBlast VALUES (?,?,?,?)
 				''', parsers.blast_hit_gen(blastfile))
+			
+	## Search Functions
+	
+	def filter_on_rBlast(self,user_string,user_func=None,evalue=10.0):
+		'''
+		Filter protein ids using a reciprocal blast. Returns a sqlite3 search.
+		Input string corresponds to the column rBlast.hit. You can pass in 
+		a function that parses this column and returns the value matched against
+		<user_string>. You can also provide a maximum evalue (must be float), 
+		which is 10.0 by default.
+		
+		Examples:
+		>>> search = a.filter_on_rBlast("jgi|SacceM3707_1|37034|...
+		or
+		>>> func = lambda x: x.split("|")[2]
+		>>> search = a.filter_on_rBlast("37034",func,evalue=1e-10)
+		>>> search.fetchall()
+		[(u'196004',),
+		(u'36510',)]
+		'''
+		if user_func:
+			try:
+				self.con.create_function("uf",1,user_func)
+			except sql.OperationalError: # if user function already exists
+				pass
+			return self.con.execute('''
+				SELECT protID from rBlast 
+				WHERE uf(rBlast.hit) == ?
+				AND rBlast.evalue <= ?''', (user_string,evalue))
+		else:
+			return self.con.execute('''
+				SELECT protID from rBlast
+				WHERE rBlast.hit == ?
+				AND rBlast.evalue <= ?''', (user_string,evalue))
