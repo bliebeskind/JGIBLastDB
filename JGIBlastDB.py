@@ -35,6 +35,7 @@ class JGIBlastDB:
 		
 		Columns correspond to the csv except the first csv column, "Hit" 
 		is broken into two columns in the database: "protID" and "orgString".
+		protID is the primay key and is used as a foreign key in other tables.
 		'''
 		try:
 			self.con.execute('''
@@ -70,6 +71,13 @@ class JGIBlastDB:
 		'''
 		Load the corresponding fasta into a table called JGIFasta. Assumption
 		is that fasta file will have proteins.
+		
+		Columns:
+		
+		protID: 	JGI protein ID (TEXT PRIMARY KEY)
+		orgString: 	JGI organism identifier (TEXT)
+		protein: 	Protein sequence (TEXT)
+		** protID is a FOREIGN KEY referencing JGIBlast(protID)
 		'''
 		try:
 			self.con.execute('''
@@ -88,6 +96,16 @@ class JGIBlastDB:
 			
 	def load_reciprocal_blast(self,blastfile):
 		'''
+		Load a table of reciprocal blast hits. Infile must be in xml format
+		(-outfmt 5).
+		
+		Columns:
+		
+		protID: 	JGI protein ID (TEXT PRIMARY KEY)
+		orgString: 	JGI organism identifier (TEXT)
+		hit: 		Description line of top hit (TEXT)
+		evalue: 	REAL
+		** protID is a FOREIGN KEY referencing JGIBlast(protID)
 		'''
 		try:
 			self.con.execute('''
