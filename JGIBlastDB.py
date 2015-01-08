@@ -126,7 +126,7 @@ class JGIBlastDB:
 			
 	## Search Functions
 	
-	def filter_on_rBlast(self,user_string,user_func=None,evalue=10.0):
+	def protIDs_from_rBlast(self,user_string,user_func=None,evalue=10.0):
 		'''
 		Filter protein ids using a reciprocal blast. Returns a sqlite3 search.
 		Input string corresponds to the column rBlast.hit. You can pass in 
@@ -157,3 +157,4 @@ class JGIBlastDB:
 				SELECT protID from rBlast
 				WHERE rBlast.hit == ?
 				AND rBlast.evalue <= ?''', (user_string,evalue))
+
