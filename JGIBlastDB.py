@@ -129,16 +129,17 @@ class JGIBlastDB:
 	def protIDs_from_rBlast(self,user_string,user_func=None,evalue=10.0):
 		'''
 		Filter protein ids using a reciprocal blast. Returns a sqlite3 search.
+		
 		Input string corresponds to the column rBlast.hit. You can pass in 
 		a function that parses this column and returns the value matched against
 		<user_string>. You can also provide a maximum evalue (must be float), 
 		which is 10.0 by default.
 		
 		Examples:
-		>>> search = a.filter_on_rBlast("jgi|SacceM3707_1|37034|...
+		>>> search = a.proteinIDs_from_rBlast("jgi|SacceM3707_1|37034|...
 		or
 		>>> func = lambda x: x.split("|")[2]
-		>>> search = a.filter_on_rBlast("37034",func,evalue=1e-10)
+		>>> search = a.proteinIDs_from_rBlast("37034",func,evalue=1e-10)
 		>>> search.fetchall()
 		[(u'196004',),
 		(u'36510',)]
@@ -158,3 +159,39 @@ class JGIBlastDB:
 				WHERE rBlast.hit == ?
 				AND rBlast.evalue <= ?''', (user_string,evalue))
 
+	def fastas_from_rBlast(self,user_string,user_func=None,evalue=10.0):
+		'''
+		Filter sequences using a reciprocal blast. Returns generator of 
+		SeqRecord objects of sequences that match user input.
+		
+		Input string corresponds to the column rBlast.hit. You can pass in 
+		a function that parses this column and returns the value matched against
+		<user_string>. You can also provide a maximum evalue (must be float), 
+		which is 10.0 by default.
+		
+		Examples:
+		>>> seqs = a.fastas_from_rBlast("jgi|SacceM3707_1|37034|...
+		or
+		>>> func = lambda x: x.split("|")[2]
+		>>> seqs = a.fastas_from_rBlast("37034",func,evalue=1e-10)
+		>>> SeqIO.write(seqs,"rBlast_filtered_seqs.fas",'fasta')
+		'''
+		if user_func:
+			try:
+				self.con.create_function("uf",1,user_func)
+			except sql.OperationalError: # if user function already exists
+				pass
+			search = self.con.execute('''
+				SELECT b.hitName, f.protein FROM
+				JGIBlast b JOIN JGIFasta f on b.protID=f.protID
+				JOIN rBlast r on b.protID=r.protID
+				WHERE uf(r.hit) == ?
+				AND r.evalue <= ?''', (user_string,evalue))
+		else:
+			search = self.con.execute('''
+				SELECT b.hitName, f.protein FROM
+				JGIBlast b JOIN JGIFasta f on b.protID=f.protID
+				JOIN rBlast r on b.protID=r.protID
+				WHERE rBlast.hit == ?
+				AND rBlast.evalue <= ?''', (user_string,evalue))
+		return (SeqRecord(Seq(j),id=i,description='') for i,j in search)
